@@ -6,7 +6,11 @@ document.getElementById('summarizeButton').addEventListener('click', () => {
           function: summarizePage
         },
         (result) => {
-          document.getElementById('summary').innerText = result[0].result;
+          if (chrome.runtime.lastError) {
+            console.error(chrome.runtime.lastError);
+          } else {
+            document.getElementById('summary').innerText = result[0].result;
+          }
         }
       );
     });
@@ -20,26 +24,43 @@ document.getElementById('summarizeButton').addEventListener('click', () => {
     const config = await configResponse.json();
     const apiKey = config.GEMINI_API_KEY;
   
-    const apiUrl = 'https://api.gemini.com/v1/summarize';
-    
-    const requestBody = {
-      model: "gemini-1.5-flash",
-      prompt: text,
-      temperature: 1,
-      top_p: 0.95,
-      max_output_tokens: 8192
+    return new Promise((resolve, reject) => {
+      callGeminiAPI(text, apiKey, (result) => {
+        if (result.error) {
+          reject(result.error);
+        } else {
+          resolve(result);
+        }
+      });
+    });
+  }
+  
+  function callGeminiAPI(text, apiKey, sendResponse) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  
+    const data = {
+      contents: [{
+        parts: [{
+          text: text
+        }]
+      }]
     };
   
-    const summaryResponse = await fetch(apiUrl, {
+    fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+      const generatedText = data.contents[0].parts[0].text;
+      sendResponse(generatedText);
+    })
+    .catch((error) => {
+      console.error('Error:', error);
+      sendResponse({ error: error.toString() });
     });
-  
-    const summaryData = await summaryResponse.json();
-    return summaryData.choices[0].text;
   }
   
